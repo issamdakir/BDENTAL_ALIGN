@@ -285,8 +285,12 @@ class BDENTAL_ALIGN_OT_AlignPoints(bpy.types.Operator):
 
             if event.value == ("PRESS"):
 
-                for RefP in self.TotalRefPoints:
-                    bpy.data.objects.remove(RefP)
+                TargetObj = self.TargetObject
+                SourceObj = self.SourceObject
+                
+                if self.TargetRefPoints :
+                    for RefP in self.TotalRefPoints:
+                        bpy.data.objects.remove(RefP)
                 Override = context.copy()
                 area3D = [
                     area for area in context.screen.areas if area.type == "VIEW_3D"
