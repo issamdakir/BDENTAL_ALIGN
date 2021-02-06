@@ -62,9 +62,11 @@ class BDENTAL_ALIGN_OT_AlignPoints(bpy.types.Operator):
                 TargetKdList=TargetKdList, SourceKdList=SourceKdList
             )
             SourceObj.matrix_world = TransformMatrix @ SourceObj.matrix_world
+            for RefP in self.SourceRefPoints :
+                RefP.matrix_world = TransformMatrix @ RefP.matrix_world
             # Update scene :
             SourceObj.update_tag()
-            context.view_layer.update()
+            bpy.context.view_layer.update()
 
             SourceObj = self.SourceObject
 
@@ -76,6 +78,9 @@ class BDENTAL_ALIGN_OT_AlignPoints(bpy.types.Operator):
                 SourceVcoList, TargetVcoList, VertsLimite=VertsLimite
             )
             MaxDist = max(DistList)
+
+            bpy.ops.wm.redraw_timer(context,type='DRAW_SWAP')
+            #######################################################
             if MaxDist <= Precision:
                 self.ResultMessage = [
                     "Allignement Done !",
@@ -157,7 +162,7 @@ class BDENTAL_ALIGN_OT_AlignPoints(bpy.types.Operator):
 
                 TargetObj = self.TargetObject
                 SourceObj = self.SourceObject
-
+                Override, area3D, space3D = CtxOverride(context)
                 #############################################
                 condition = (
                     len(self.TargetRefPoints) == len(self.SourceRefPoints)
@@ -194,6 +199,8 @@ class BDENTAL_ALIGN_OT_AlignPoints(bpy.types.Operator):
                         bpy.context.view_layer.objects.active = TargetObj
                         obj.update_tag()
 
+                    bpy.ops.wm.redraw_timer(Override,type='DRAW_SWAP')
+                    #########################################################
                     # ICP alignement :
                     print("ICP Align processing...")
                     IcpVidDict = VidDictFromPoints(
@@ -212,7 +219,7 @@ class BDENTAL_ALIGN_OT_AlignPoints(bpy.types.Operator):
                     )
 
                     self.IcpPipline(
-                        context,
+                        context=Override,
                         SourceObj=SourceObj,
                         TargetObj=TargetObj,
                         SourceVidList=SourceVidList,
@@ -225,21 +232,7 @@ class BDENTAL_ALIGN_OT_AlignPoints(bpy.types.Operator):
                     for obj in self.TotalRefPoints:
                         bpy.data.objects.remove(obj)
 
-                    Override = context.copy()
-                    area3D = [
-                        area for area in context.screen.areas if area.type == "VIEW_3D"
-                    ][0]
-                    space3D = [
-                        space for space in area3D.spaces if space.type == "VIEW_3D"
-                    ][0]
-                    region3D = [reg for reg in area3D.regions if reg.type == "WINDOW"][
-                        0
-                    ]
-                    Override["area"], Override["space_data"], Override["region"] = (
-                        area3D,
-                        space3D,
-                        region3D,
-                    )
+                    Override, area3D, space3D = CtxOverride(context)
                     ##########################################################
                     space3D.overlay.show_outline_selected = True
                     space3D.overlay.show_object_origins = True
@@ -291,19 +284,7 @@ class BDENTAL_ALIGN_OT_AlignPoints(bpy.types.Operator):
                 if self.TargetRefPoints :
                     for RefP in self.TotalRefPoints:
                         bpy.data.objects.remove(RefP)
-                Override = context.copy()
-                area3D = [
-                    area for area in context.screen.areas if area.type == "VIEW_3D"
-                ][0]
-                space3D = [space for space in area3D.spaces if space.type == "VIEW_3D"][
-                    0
-                ]
-                region3D = [reg for reg in area3D.regions if reg.type == "WINDOW"][0]
-                Override["area"], Override["space_data"], Override["region"] = (
-                    area3D,
-                    space3D,
-                    region3D,
-                )
+                Override, area3D, space3D = CtxOverride(context)
                 ##########################################################
                 space3D.overlay.show_outline_selected = True
                 space3D.overlay.show_object_origins = True
@@ -413,20 +394,7 @@ class BDENTAL_ALIGN_OT_AlignPoints(bpy.types.Operator):
                 bpy.context.space_data.shading.background_color = (0.0, 0.0, 0.0)
 
                 bpy.ops.screen.screen_full_area()
-                Override = context.copy()
-                area3D = [
-                    area for area in context.screen.areas if area.type == "VIEW_3D"
-                ][0]
-                space3D = [space for space in area3D.spaces if space.type == "VIEW_3D"][
-                    0
-                ]
-                region3D = [reg for reg in area3D.regions if reg.type == "WINDOW"][0]
-                Override["area"], Override["space_data"], Override["region"] = (
-                    area3D,
-                    space3D,
-                    region3D,
-                )
-
+                Override, area3D, space3D = CtxOverride(context)
                 # bpy.ops.object.select_all(action="DESELECT")
                 context.window_manager.modal_handler_add(self)
 
