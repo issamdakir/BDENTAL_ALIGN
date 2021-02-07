@@ -1,2 +1,2 @@
 # BDENTAL_ALIGN
-Blender addo-on for Dental meshs alignement
+Blender addo-on for Dental meshs alignment
