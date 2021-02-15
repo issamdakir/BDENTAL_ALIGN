@@ -20,8 +20,8 @@ class BDENTAL_ALIGN_OT_AlignPoints(bpy.types.Operator):
     bl_label = "ALIGN POINTS"
     bl_options = {"REGISTER", "UNDO"}
 
-    TargetColor = (1, 0, 0, 1)  # red
-    SourceColor = (0, 0, 1, 1)  # blue
+    TargetColor = (0, 1, 0, 1)  # Green
+    SourceColor = (1, 0, 0, 1)  # Red
     CollName = "ALIGN POINTS"
     TargetChar = "B"
     SourceChar = "A"
@@ -232,6 +232,10 @@ class BDENTAL_ALIGN_OT_AlignPoints(bpy.types.Operator):
                     for obj in self.TotalRefPoints:
                         bpy.data.objects.remove(obj)
 
+                    AlignColl = bpy.data.collections.get('ALIGN POINTS')
+                    if AlignColl :
+                        bpy.data.collections.remove(AlignColl)
+
                     Override, area3D, space3D = CtxOverride(context)
                     ##########################################################
                     space3D.overlay.show_outline_selected = True
@@ -284,6 +288,11 @@ class BDENTAL_ALIGN_OT_AlignPoints(bpy.types.Operator):
                 if self.TargetRefPoints :
                     for RefP in self.TotalRefPoints:
                         bpy.data.objects.remove(RefP)
+
+                AlignColl = bpy.data.collections.get('ALIGN POINTS')
+                if AlignColl :
+                    bpy.data.collections.remove(AlignColl)
+
                 Override, area3D, space3D = CtxOverride(context)
                 ##########################################################
                 space3D.overlay.show_outline_selected = True
