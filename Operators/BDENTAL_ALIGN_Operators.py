@@ -432,13 +432,13 @@ class BDENTAL_ALIGN_OT_AlignPointsInfo(bpy.types.Operator):
             "\u2588 Press <SHIFT + Click> to select the Base Object,",
             "\u2588 Click <ALIGN> button,",
             f"      Press <Left Click> to Place Cursor,",
-            f"      Press <'B'> to Add red Point (Base),",
-            f"      Press <'A'> to Add blue Point (Align),",
+            f"      Press <'B'> to Add Green Point (Base),",
+            f"      Press <'A'> to Add Red Point (Align),",
             f"      Press <'DEL'> to delete Point,",
             f"      Press <'ESC'> to Cancel Operation,",
             f"      Press <'ENTER'> to execute Alignement.",
             "\u2588 NOTE :",
-            "3 Red Points and 3 Blue Points,",
+            "3 Green Points and 3 Red Points,",
             "are the minimum required for Alignement!",
         ]
         ShowMessageBox(message=message, title="INFO", icon="INFO")
