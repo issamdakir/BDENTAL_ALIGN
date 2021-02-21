@@ -31,8 +31,8 @@ class BDENTAL_ALIGN_OT_AlignPoints(bpy.types.Operator):
         context,
         SourceObj,
         TargetObj,
-        SourceVidList,
-        TargetVidList,
+        SourceVidDict,
+        TargetVidDict,
         VertsLimite,
         Iterations,
         Precision,
@@ -41,67 +41,96 @@ class BDENTAL_ALIGN_OT_AlignPoints(bpy.types.Operator):
         MaxDist = 0.0
         for i in range(Iterations):
 
-            SourceVcoList = [
-                SourceObj.matrix_world @ SourceObj.data.vertices[idx].co
-                for idx in SourceVidList
-            ]
-            TargetVcoList = [
-                TargetObj.matrix_world @ TargetObj.data.vertices[idx].co
-                for idx in TargetVidList
-            ]
+            SourceKdList, TargetKdList, DistList = [], [], []
 
-            (
-                SourceKdList,
-                TargetKdList,
-                DistList,
-                SourceIndexList,
-                TargetIndexList,
-            ) = KdIcpPairs(SourceVcoList, TargetVcoList, VertsLimite=VertsLimite)
+            for n in range(len(self.SourceRefPoints)) :
 
-            TransformMatrix = KdIcpPairsToTransformMatrix(
-                TargetKdList=TargetKdList, SourceKdList=SourceKdList
-            )
-            SourceObj.matrix_world = TransformMatrix @ SourceObj.matrix_world
-            for RefP in self.SourceRefPoints :
-                RefP.matrix_world = TransformMatrix @ RefP.matrix_world
-            # Update scene :
-            SourceObj.update_tag()
-            bpy.context.view_layer.update()
+                SourceVcoList = [
+                    SourceObj.matrix_world @ SourceObj.data.vertices[idx].co
+                    for idx in SourceVidDict[n]
+                ]
+                TargetVcoList = [
+                    TargetObj.matrix_world @ TargetObj.data.vertices[idx].co
+                    for idx in TargetVidDict[n]
+                ]
 
-            SourceObj = self.SourceObject
+                (
+                    RefSourceKdList,
+                    RefTargetKdList,
+                    RefDistList,
+                    SourceIndexList,
+                    TargetIndexList,
+                ) = KdIcpPairs(SourceVcoList, TargetVcoList, VertsLimite=VertsLimite)
 
-            SourceVcoList = [
-                SourceObj.matrix_world @ SourceObj.data.vertices[idx].co
-                for idx in SourceVidList
-            ]
-            _, _, DistList, _, _ = KdIcpPairs(
-                SourceVcoList, TargetVcoList, VertsLimite=VertsLimite
-            )
-            MaxDist = max(DistList)
+                SourceKdList.extend(RefSourceKdList)
+                TargetKdList.extend(RefTargetKdList)
+                DistList.extend(RefDistList)
 
-            bpy.ops.wm.redraw_timer(context,type='DRAW_SWAP')
-            #######################################################
-            if MaxDist <= Precision:
+            MeanDist = np.mean(DistList)
+            print(f"Number of iterations = {i}")
+            print(f"Mean Distance = {round(MeanDist, 6)} mm")
+
+            if MeanDist <= Precision:
                 self.ResultMessage = [
                     "Allignement Done !",
-                    f"Max Distance < or = {Precision} mm",
+                    f"Mean Distance < or = {Precision} mm",
                 ]
-                print(f"Number of iterations = {i}")
+                
                 print(f"Precision of {Precision} mm reached.")
-                print(f"Max Distance = {round(MaxDist, 6)} mm")
                 break
 
-        if MaxDist > Precision:
-            print(f"Number of iterations = {i}")
-            print(f"Max Distance = {round(MaxDist, 6)} mm")
-            self.ResultMessage = [
-                "Allignement Done !",
-                f"Max Distance = {round(MaxDist, 6)} mm",
-            ]
+            if MeanDist > Precision:
+                
+                TransformMatrix = KdIcpPairsToTransformMatrix(
+                    TargetKdList=TargetKdList, SourceKdList=SourceKdList
+                )
+                SourceObj.matrix_world = TransformMatrix @ SourceObj.matrix_world
+
+                for RefP in self.SourceRefPoints :
+                    RefP.matrix_world = TransformMatrix @ RefP.matrix_world
+                # Update scene :
+                SourceObj.update_tag()
+                bpy.context.view_layer.update()
+                
+                # bpy.ops.wm.redraw_timer(context, type='DRAW_SWAP')
+
+            # SourceObj = self.SourceObject
+
+        #     SourceVcoList = [
+        #         SourceObj.matrix_world @ SourceObj.data.vertices[idx].co
+        #         for idx in SourceVidList
+        #     ]
+        #     _, _, DistList, _, _ = KdIcpPairs(
+        #         SourceVcoList, TargetVcoList, VertsLimite=VertsLimite
+        #     )
+        #     MaxDist = max(DistList)
+        #     MeanDist = np.mean(DistList)
+        #     print(f"Number of iterations = {i}")
+        #     print(f"Mean Distance = {round(MeanDist, 4)} mm")
+        #     bpy.ops.wm.redraw_timer(context,type='DRAW_SWAP')
+        #     #######################################################
+        #     if MeanDist <= Precision:
+        #         self.ResultMessage = [
+        #             "Allignement Done !",
+        #             f"Mean Distance < or = {Precision} mm",
+        #         ]
+        #         print(f"Number of iterations = {i}")
+        #         print(f"Precision of {Precision} mm reached.")
+        #         print(f"Mean Distance = {round(MeanDist, 4)} mm")
+        #         break
+
+        # if MeanDist > Precision:
+        #     print(f"Number of iterations = {i}")
+        print(f"FINISHED : Mean Distance = ({round(MeanDist, 6)} mm)")
+        self.ResultMessage = [
+            "Allignement Done !",
+            f"Mean Distance = {round(MeanDist, 6)} mm",
+        ]
 
     def modal(self, context, event):
 
         ############################################
+        # undo = (event.ctrl == True and event.type == 'Z')
         if not event.type in {
             self.TargetChar,
             self.SourceChar,
@@ -112,6 +141,9 @@ class BDENTAL_ALIGN_OT_AlignPoints(bpy.types.Operator):
             # allow navigation
 
             return {"PASS_THROUGH"}
+
+
+                
         #########################################
         if event.type == self.TargetChar:
             # Add Target Refference point :
@@ -191,13 +223,18 @@ class BDENTAL_ALIGN_OT_AlignPoints(bpy.types.Operator):
                         SourceRefP.matrix_world = (
                             TransformMatrix @ SourceRefP.matrix_world
                         )
+                        SourceRefP.update_tag()
+
+                    
+                    for obj in [TargetObj, SourceObj]:
+                        obj.update_tag()
+                    # Update scene :
+                    context.view_layer.update()
+
+                    AdjustRefPoints(self.TargetRefPoints, self.SourceRefPoints)
 
                     # Update scene :
                     context.view_layer.update()
-                    for obj in [TargetObj, SourceObj]:
-                        obj.select_set(True)
-                        bpy.context.view_layer.objects.active = TargetObj
-                        obj.update_tag()
 
                     bpy.ops.wm.redraw_timer(Override,type='DRAW_SWAP')
                     #########################################################
@@ -208,24 +245,30 @@ class BDENTAL_ALIGN_OT_AlignPoints(bpy.types.Operator):
                         SourceRefPoints=self.SourceRefPoints,
                         TargetObj=TargetObj,
                         SourceObj=SourceObj,
-                        radius=3,
+                        radius=2,
                     )
                     BDENTAL_ALIGN_Props = bpy.context.scene.BDENTAL_ALIGN_Props
                     BDENTAL_ALIGN_Props.IcpVidDict = str(IcpVidDict)
 
-                    SourceVidList, TargetVidList = (
+                    SourceVidDict, TargetVidDict = (
                         IcpVidDict[SourceObj],
                         IcpVidDict[TargetObj],
                     )
+
+
+                    # SourceVidList, TargetVidList = (
+                    #     IcpVidDict[SourceObj],
+                    #     IcpVidDict[TargetObj],
+                    # )
 
                     self.IcpPipline(
                         context=Override,
                         SourceObj=SourceObj,
                         TargetObj=TargetObj,
-                        SourceVidList=SourceVidList,
-                        TargetVidList=TargetVidList,
+                        SourceVidDict=SourceVidDict,
+                        TargetVidDict=TargetVidDict,
                         VertsLimite=10000,
-                        Iterations=30,
+                        Iterations=20,
                         Precision=0.0001,
                     )
 

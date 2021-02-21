@@ -114,6 +114,21 @@ def RefPointsToTransformMatrix(TargetRefPoints, SourceRefPoints):
 
     return TransformMatrix
 
+def AdjustRefPoints(TargetRefPoints, SourceRefPoints):
+
+    for i in range(len(TargetRefPoints)):
+
+        SP = SourceRefPoints[i]
+        TP = TargetRefPoints[i]
+
+        Mid_Location = (SP.location + TP.location)/2
+        SP.location = TP.location = Mid_Location
+
+        SP.update_tag()
+        TP.update_tag()
+                
+    bpy.context.view_layer.update()
+
 
 def KdIcpPairs(SourceVcoList, TargetVcolist, VertsLimite=5000):
     start = Tcounter()
@@ -142,12 +157,12 @@ def KdIcpPairs(SourceVcoList, TargetVcolist, VertsLimite=5000):
 
         Tco, TargetIndex, dist = kd.find(Sco)
         if Tco:
-            if not TargetIndex in TargetIndexList:
-                TargetIndexList.append(TargetIndex)
-                SourceIndexList.append(SourceIndex)
-                TargetKdList.append(Tco)
-                SourceKdList.append(Sco)
-                DistList.append(dist)
+            # if not TargetIndex in TargetIndexList:
+            TargetIndexList.append(TargetIndex)
+            SourceIndexList.append(SourceIndex)
+            TargetKdList.append(Tco)
+            SourceKdList.append(Sco)
+            DistList.append(dist)
     finish = Tcounter()
     # print(f"KD total iterations : {len(SourceVcoList)}")
     # print(f"KD Index List : {len(IndexList)}")
@@ -181,25 +196,34 @@ def KdRadiusVerts(obj, RefCo, radius):
 
 
 def VidDictFromPoints(TargetRefPoints, SourceRefPoints, TargetObj, SourceObj, radius):
-    IcpVidDict = {TargetObj: [], SourceObj: []}
+    # IcpVidDict = {TargetObj: [], SourceObj: []}
+    IcpVidDict = {TargetObj: {}, SourceObj: {}}
+
 
     for obj in [TargetObj, SourceObj]:
         if obj == TargetObj:
-            for RefTargetP in TargetRefPoints:
+            for i, RefTargetP in enumerate(TargetRefPoints):
                 RefCo = RefTargetP.location
                 RadiusVertsIds, RadiusVertsCo, RadiusVertsDistance = KdRadiusVerts(
                     TargetObj, RefCo, radius
                 )
-                IcpVidDict[TargetObj].extend(RadiusVertsIds)
+                IcpVidDict[TargetObj][i] = RadiusVertsIds
+                # [ IcpVidDict[TargetObj].append(idx) for idx in RadiusVertsIds if not idx in IcpVidDict[TargetObj] ]
+                # IcpVidDict[TargetObj].extend(RadiusVertsIds)
                 for idx in RadiusVertsIds:
                     obj.data.vertices[idx].select = True
         if obj == SourceObj:
-            for RefSourceP in SourceRefPoints:
+            for i, RefSourceP in enumerate(SourceRefPoints):
                 RefCo = RefSourceP.location
                 RadiusVertsIds, RadiusVertsCo, RadiusVertsDistance = KdRadiusVerts(
                     SourceObj, RefCo, radius
                 )
-                IcpVidDict[SourceObj].extend(RadiusVertsIds)
+
+                IcpVidDict[SourceObj][i] = RadiusVertsIds
+
+                # [ IcpVidDict[SourceObj].append(idx) for idx in RadiusVertsIds if not idx in IcpVidDict[SourceObj] ]
+
+                # IcpVidDict[SourceObj].extend(RadiusVertsIds)
                 for idx in RadiusVertsIds:
                     obj.data.vertices[idx].select = True
 
