@@ -1,23 +1,12 @@
-from math import degrees, radians, pi, ceil, floor
-import numpy as np
-import threading
-from time import sleep, perf_counter as Tcounter
-from queue import Queue
+from time import perf_counter as Tcounter
 
-# Blender Imports :
 import bpy
 import mathutils
 from mathutils import Matrix, Vector, Euler, kdtree
 
-import SimpleITK as sitk
-
-# Global Variables :
-
-#######################################################################################
-# Popup message box function :
-#######################################################################################
-
-
+from math import degrees, radians, pi, ceil, floor
+import numpy as np
+####################################################
 def ShowMessageBox(message=[], title="INFO", icon="INFO"):
     def draw(self, context):
         for txtLine in message:
@@ -25,24 +14,101 @@ def ShowMessageBox(message=[], title="INFO", icon="INFO"):
 
     bpy.context.window_manager.popup_menu(draw, title=title, icon=icon)
 
+def KdIcpPairs(SourceVcoList, TargetVcolist, VertsLimite=5000):
+    start = Tcounter()
+    # print("KD processing start...")
+    SourceKdList, TargetKdList, DistList, SourceIndexList, TargetIndexList = (
+        [],
+        [],
+        [],
+        [],
+        [],
+    )
+    size = len(TargetVcolist)
+    kd = kdtree.KDTree(size)
 
-##############################################################
-# Align utils :
-##############################################################
-def MoveToCollection(obj, CollName):
+    for i, Vco in enumerate(TargetVcolist):
+        kd.insert(Vco, i)
 
-    OldColl = obj.users_collection  # list of all collection the obj is in
-    NewColl = bpy.data.collections.get(CollName)
-    if not NewColl:
-        NewColl = bpy.data.collections.new(CollName)
-        bpy.context.scene.collection.children.link(NewColl)
-    if not obj in NewColl.objects[:]:
-        NewColl.objects.link(obj)  # link obj to scene
-    if OldColl:
-        for Coll in OldColl:  # unlink from all  precedent obj collections
-            if Coll is not NewColl:
-                Coll.objects.unlink(obj)
+    kd.balance()
 
+    n = len(SourceVcoList)
+    if n > VertsLimite:
+        step = ceil(n / VertsLimite)
+        SourceVcoList = SourceVcoList[::step]
+
+    for SourceIndex, Sco in enumerate(SourceVcoList):
+
+        Tco, TargetIndex, dist = kd.find(Sco)
+        if Tco:
+            if not TargetIndex in TargetIndexList:
+                TargetIndexList.append(TargetIndex)
+                SourceIndexList.append(SourceIndex)
+                TargetKdList.append(Tco)
+                SourceKdList.append(Sco)
+                DistList.append(dist)
+    finish = Tcounter()
+    # print(f"KD total iterations : {len(SourceVcoList)}")
+    # print(f"KD Index List : {len(IndexList)}")
+
+    # print(f"KD finshed in {finish-start} secondes")
+    return SourceKdList, TargetKdList, DistList, SourceIndexList, TargetIndexList
+
+
+def KdIcpPairsToTransformMatrix(TargetKdList, SourceKdList):
+    # make 2 arrays of coordinates :
+    TargetArray = np.array(TargetKdList, dtype=np.float64).T
+    SourceArray = np.array(SourceKdList, dtype=np.float64).T
+
+    # Calculate centers of Target and Source RefPoints :
+    TargetCenter, SourceCenter = np.mean(TargetArray, axis=1), np.mean(
+        SourceArray, axis=1
+    )
+
+    # Calculate Translation :
+    ###################################
+
+    # TransMatrix_1 : Matrix(4x4) will translate center of SourceRefPoints...
+    # to origine (0,0,0) location.
+    TransMatrix_1 = Matrix.Translation(Vector(-SourceCenter))
+
+    # TransMatrix_2 : Matrix(4x4) will translate center of SourceRefPoints...
+    #  to the center of TargetRefPoints location.
+    TransMatrix_2 = Matrix.Translation(Vector(TargetCenter))
+
+    # Calculate Rotation :
+    ###################################
+
+    # Home Arrays will get the Centered Target and Source RefPoints around origin (0,0,0).
+    HomeTargetArray, HomeSourceArray = (
+        TargetArray - TargetCenter.reshape(3, 1),
+        SourceArray - SourceCenter.reshape(3, 1),
+    )
+    # Rigid transformation via SVD of covariance matrix :
+    U, S, Vt = np.linalg.svd(np.dot(HomeTargetArray, HomeSourceArray.T))
+
+    # rotation matrix from SVD orthonormal bases :
+    R = np.dot(U, Vt)
+    if np.linalg.det(R) < 0.0:
+        Vt[2, :] *= -1
+        R = np.dot(U, Vt)
+        print(" Reflection fixed ")
+
+    RotationMatrix = Matrix(R).to_4x4()
+    TransformMatrix = TransMatrix_2 @ RotationMatrix @ TransMatrix_1
+
+    return TransformMatrix
+def CtxOverride(context):
+    Override = context.copy()
+    area3D = [area for area in context.screen.areas if area.type == "VIEW_3D"][0]
+    space3D = [space for space in area3D.spaces if space.type == "VIEW_3D"][0]
+    region3D = [reg for reg in area3D.regions if reg.type == "WINDOW"][0]
+    Override["area"], Override["space_data"], Override["region"] = (
+        area3D,
+        space3D,
+        region3D,
+    )
+    return Override, area3D, space3D 
 
 def AddRefPoint(name, color, CollName=None):
 
@@ -65,6 +131,19 @@ def AddRefPoint(name, color, CollName=None):
     RefP.show_name = True
     return RefP
 
+def MoveToCollection(obj, CollName):
+
+    OldColl = obj.users_collection  # list of all collection the obj is in
+    NewColl = bpy.data.collections.get(CollName)
+    if not NewColl:
+        NewColl = bpy.data.collections.new(CollName)
+        bpy.context.scene.collection.children.link(NewColl)
+    if not obj in NewColl.objects[:]:
+        NewColl.objects.link(obj)  # link obj to scene
+    if OldColl:
+        for Coll in OldColl:  # unlink from all  precedent obj collections
+            if Coll is not NewColl:
+                Coll.objects.unlink(obj)
 
 def RefPointsToTransformMatrix(TargetRefPoints, SourceRefPoints):
     # TransformMatrix = Matrix()  # identity Matrix (4x4)
@@ -117,48 +196,6 @@ def RefPointsToTransformMatrix(TargetRefPoints, SourceRefPoints):
 
     return TransformMatrix
 
-
-def KdIcpPairs(SourceVcoList, TargetVcolist, VertsLimite=5000):
-    start = Tcounter()
-    # print("KD processing start...")
-    SourceKdList, TargetKdList, DistList, SourceIndexList, TargetIndexList = (
-        [],
-        [],
-        [],
-        [],
-        [],
-    )
-    size = len(TargetVcolist)
-    kd = kdtree.KDTree(size)
-
-    for i, Vco in enumerate(TargetVcolist):
-        kd.insert(Vco, i)
-
-    kd.balance()
-
-    n = len(SourceVcoList)
-    if n > VertsLimite:
-        step = ceil(n / VertsLimite)
-        SourceVcoList = SourceVcoList[::step]
-
-    for SourceIndex, Sco in enumerate(SourceVcoList):
-
-        Tco, TargetIndex, dist = kd.find(Sco)
-        if Tco:
-            if not TargetIndex in TargetIndexList:
-                TargetIndexList.append(TargetIndex)
-                SourceIndexList.append(SourceIndex)
-                TargetKdList.append(Tco)
-                SourceKdList.append(Sco)
-                DistList.append(dist)
-    finish = Tcounter()
-    # print(f"KD total iterations : {len(SourceVcoList)}")
-    # print(f"KD Index List : {len(IndexList)}")
-
-    # print(f"KD finshed in {finish-start} secondes")
-    return SourceKdList, TargetKdList, DistList, SourceIndexList, TargetIndexList
-
-
 def KdRadiusVerts(obj, RefCo, radius):
 
     RadiusVertsIds = []
@@ -181,7 +218,6 @@ def KdRadiusVerts(obj, RefCo, radius):
         RadiusVertsDistance.append(dist)
 
     return RadiusVertsIds, RadiusVertsCo, RadiusVertsDistance
-
 
 def VidDictFromPoints(TargetRefPoints, SourceRefPoints, TargetObj, SourceObj, radius):
     IcpVidDict = {TargetObj: [], SourceObj: []}
@@ -213,100 +249,16 @@ def VidDictFromPoints(TargetRefPoints, SourceRefPoints, TargetObj, SourceObj, ra
 
     return IcpVidDict
 
-
-def KdIcpPairsToTransformMatrix(TargetKdList, SourceKdList):
-    # make 2 arrays of coordinates :
-    TargetArray = np.array(TargetKdList, dtype=np.float64).T
-    SourceArray = np.array(SourceKdList, dtype=np.float64).T
-
-    # Calculate centers of Target and Source RefPoints :
-    TargetCenter, SourceCenter = np.mean(TargetArray, axis=1), np.mean(
-        SourceArray, axis=1
-    )
-
-    # Calculate Translation :
-    ###################################
-
-    # TransMatrix_1 : Matrix(4x4) will translate center of SourceRefPoints...
-    # to origine (0,0,0) location.
-    TransMatrix_1 = Matrix.Translation(Vector(-SourceCenter))
-
-    # TransMatrix_2 : Matrix(4x4) will translate center of SourceRefPoints...
-    #  to the center of TargetRefPoints location.
-    TransMatrix_2 = Matrix.Translation(Vector(TargetCenter))
-
-    # Calculate Rotation :
-    ###################################
-
-    # Home Arrays will get the Centered Target and Source RefPoints around origin (0,0,0).
-    HomeTargetArray, HomeSourceArray = (
-        TargetArray - TargetCenter.reshape(3, 1),
-        SourceArray - SourceCenter.reshape(3, 1),
-    )
-    # Rigid transformation via SVD of covariance matrix :
-    U, S, Vt = np.linalg.svd(np.dot(HomeTargetArray, HomeSourceArray.T))
-
-    # rotation matrix from SVD orthonormal bases :
-    R = np.dot(U, Vt)
-    if np.linalg.det(R) < 0.0:
-        Vt[2, :] *= -1
-        R = np.dot(U, Vt)
-        print(" Reflection fixed ")
-
-    RotationMatrix = Matrix(R).to_4x4()
-    TransformMatrix = TransMatrix_2 @ RotationMatrix @ TransMatrix_1
-
-    return TransformMatrix
-
-def CtxOverride(context):
-    Override = context.copy()
-    area3D = [area for area in context.screen.areas if area.type == "VIEW_3D"][0]
-    space3D = [space for space in area3D.spaces if space.type == "VIEW_3D"][0]
-    region3D = [reg for reg in area3D.regions if reg.type == "WINDOW"][0]
-    Override["area"], Override["space_data"], Override["region"] = (
-        area3D,
-        space3D,
-        region3D,
-    )
-    return Override, area3D, space3D 
-
-def AddVoxelPoint(Name="Voxel Anatomical Point", Color=(1.0,0.0,0.0,1.0), Location=(0,0,0), Radius=1.2):
-    Active_Obj = bpy.context.view_layer.objects.active
-    bpy.ops.mesh.primitive_uv_sphere_add(radius=Radius, location=Location)
-    Sphere = bpy.context.object
-    Sphere.name = Name
-    Sphere.data.name = Name
-
-
-    MoveToCollection(Sphere, "VOXELS Points")
-
-    matName = f"VOXEL_Points_Mat"
-    mat = bpy.data.materials.get(matName) or bpy.data.materials.new(matName)
-    mat.diffuse_color = Color
-    mat.use_nodes = False
-    Sphere.active_material = mat
-    Sphere.show_name = True
-    bpy.ops.object.select_all(action='DESELECT')
-    Active_Obj.select_set(True)
-    bpy.context.view_layer.objects.active = Active_Obj
-    
-def MoveToCollection(obj, CollName):
-
-    OldColl = obj.users_collection  # list of all collection the obj is in
-    NewColl = bpy.data.collections.get(CollName)
-    if not NewColl:
-        NewColl = bpy.data.collections.new(CollName)
-        bpy.context.scene.collection.children.link(NewColl)
-    if not obj in NewColl.objects[:]:
-        NewColl.objects.link(obj)  # link obj to scene
-    if OldColl:
-        for Coll in OldColl:  # unlink from all  precedent obj collections
-            if Coll is not NewColl:
-                Coll.objects.unlink(obj)
-                
-    
 def CursorToVoxelPoint(Preffix, CursorMove=False):
-
+    try :
+        import SimpleITK as sitk
+    except ImportError as Er :
+        print('SimpleITK is not installed :\n',Er)
+        message = ['Voxel alignement mode need SimpleITK to be installed',
+                    'ALIGN operation cancelled']
+        ShowMessageBox(message=message, icon="COLORSET_02_VEC")
+        return None
+        
     VoxelPointCo = 0
          
     BDENTAL_Props = bpy.context.scene.BDENTAL_Props

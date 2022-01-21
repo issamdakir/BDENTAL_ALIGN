@@ -25,7 +25,7 @@ bl_info = {
     "name": "BDENTAL ALIGN",
     "author": "Essaid Issam Dakir DMD",
     "version": (1, 0, 0),
-    "blender": (2, 90, 1),
+    "blender": (3, 0, 0),
     "location": "3D View -> UI SIDE PANEL ",
     "description": "Align Tools for Digital Dentistry",
     "warning": "",

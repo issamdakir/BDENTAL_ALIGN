@@ -27,6 +27,12 @@ class BDENTAL_ALIGN_PT_Main(bpy.types.Panel):
         layout = self.layout
         split = layout.split(factor=2 / 3, align=False)
         col = split.column()
+        col.label(text="Use ICP alignement :")
+        col = split.column()
+        col.prop(BDENTAL_ALIGN_Props,'useICP',text="")
+        
+        split = layout.split(factor=2 / 3, align=False)
+        col = split.column()
         row = col.row()
         row.operator("bdental_align.alignpoints", text="ALIGN")
         col = split.column()

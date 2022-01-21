@@ -36,7 +36,8 @@ class BDENTAL_ALIGN_Props(bpy.types.PropertyGroup):
     )
 
     #######################
-    AlignModalState: BoolProperty(description="Align Modal state ", default=False)
+    AlignModalState : BoolProperty(description="Align Modal state ", default=False)
+    useICP : BoolProperty(description="use ICP mode ", default=True) 
 
 
 #################################################################################################
